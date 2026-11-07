@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from coach import CoachError, fetch_recent_games, summarize_game, analyze_records, analyze_pasted_pgn, validate_username
 from auth import router as oauth_router, challenge, verify_access
 
-mcp = FastMCP("Chess Coach", stateless_http=True, json_response=True, streamable_http_path="/")
+mcp = FastMCP("Chess Coach", stateless_http=True, json_response=True, streamable_http_path="/mcp")
 gate = asyncio.Semaphore(1)
 
 @mcp.tool()
@@ -58,4 +58,4 @@ async def protect(request: Request, call_next):
             return challenge()
     return await call_next(request)
 
-app.mount("/mcp", mcp.streamable_http_app())
+app.mount("/", mcp.streamable_http_app())
