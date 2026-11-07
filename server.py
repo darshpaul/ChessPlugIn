@@ -1,15 +1,29 @@
 from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from fastapi import FastAPI, Request
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 from coach import CoachError, fetch_recent_games, summarize_game, analyze_records, analyze_pasted_pgn, validate_username
-from auth import router as oauth_router, challenge, verify_access
+from auth import BASE, router as oauth_router, challenge, verify_access
 
-mcp = FastMCP("Chess Coach", stateless_http=True, json_response=True, streamable_http_path="/mcp")
+# FastMCP's default localhost allowlist rejects authenticated Railway requests
+# with 421, before initialize/tools/list can run. Keep host/origin checks enabled.
+mcp = FastMCP(
+    "Chess Coach", stateless_http=True, json_response=True, streamable_http_path="/mcp",
+    transport_security=TransportSecuritySettings(
+        allowed_hosts=[urlparse(BASE).netloc, "127.0.0.1:*", "localhost:*", "[::1]:*"],
+        allowed_origins=[BASE, "https://chatgpt.com", "http://127.0.0.1:*", "http://localhost:*"],
+    ),
+)
+TOOL_AUTH={"securitySchemes":[{"type":"oauth2","scopes":["chess:analyze"]}]}
+READ_ONLY=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
+LOCAL_ANALYSIS=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
 gate = asyncio.Semaphore(1)
 
-@mcp.tool()
+@mcp.tool(meta=TOOL_AUTH, annotations=READ_ONLY)
 async def list_recent_games(username: str, count: int = 5, time_class: str = "rapid") -> dict:
     """List public Chess.com games by username with ratings and links."""
     try:
@@ -18,7 +32,7 @@ async def list_recent_games(username: str, count: int = 5, time_class: str = "ra
     except CoachError as e:
         return {"error": str(e)}
 
-@mcp.tool()
+@mcp.tool(meta=TOOL_AUTH, annotations=READ_ONLY)
 async def analyze_recent_games(username: str, count: int = 5, time_class: str = "rapid", seconds_per_position: float = .15) -> dict:
     """Fetch recent games, run Stockfish, highlight opening mistakes (moves 5-15), and suggest training priorities."""
     try:
@@ -29,7 +43,7 @@ async def analyze_recent_games(username: str, count: int = 5, time_class: str = 
     except (CoachError, OSError) as e:
         return {"error": str(e)}
 
-@mcp.tool()
+@mcp.tool(meta=TOOL_AUTH, annotations=LOCAL_ANALYSIS)
 async def analyze_pgn(username: str, pgn: str, seconds_per_position: float = .15) -> dict:
     """Run Stockfish analysis on one PGN and generate individualized coaching notes."""
     try:

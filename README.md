@@ -28,6 +28,10 @@ The password and signing key must **never** be committed to GitHub or pasted int
 
 If connection creation offers CIMD versus DCR, choose **CIMD** (client ID metadata document) for this implementation. The authentication server supports the official ChatGPT public CIMD clients and ChatGPT's standard redirect URIs. It does **not** implement DCR or third-party OAuth provider registration.
 
+The server validates the exact redirect URI against ChatGPT's published client metadata and supports public-client token exchange (`none`) with S256 PKCE. Its authorization response includes the issuer (`iss`), allowing new connections to use ChatGPT's stable callback. Existing callback-specific connections remain supported.
+
+After an authentication deployment, close any old authorization page and start **Connect** again from ChatGPT. An already-open page retains its previous browser security policy, and any pending authorization codes are lost on restart.
+
 ## Verification
 
 - `GET /health`: confirms process running.
@@ -37,6 +41,24 @@ If connection creation offers CIMD versus DCR, choose **CIMD** (client ID metada
 - `GET /authorize` with valid ChatGPT client, PKCE, redirect and state: displays a login form.
 
 A successful HTTP health check alone does not prove an actual ChatGPT OAuth handshake has completed. Test from ChatGPT's connector flow.
+
+### Regression tests
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m playwright install chromium
+python -m pytest -q
+```
+
+Tests use dummy secrets and stub ChatGPT client metadata. Chromium tests intercept every request locally, including the ChatGPT callback, and verify that submitting the password really leaves the login page. API tests cover code exchange, refresh, replay prevention, resource/client/redirect/PKCE binding, authenticated `initialize`, `tools/list`, and `tools/call` on the production hostname. They also verify that invalid tokens, hosts, and origins are rejected. Live ChatGPT verification still requires the owner's password on the authorization page.
+
+### Diagnosing a stalled connection
+
+- `POST /authorize` returns 303, with no subsequent `POST /token`: check the browser console. The login page's `form-action` must allow `https://chatgpt.com`, because Chromium applies it to the form's redirect too.
+- Token exchange succeeds but `/mcp` returns 421: check the MCP transport's allowed hosts. The configured public hostname must be allowed; keep DNS rebinding protection enabled.
+- Successful connection: `/authorize` returns 303, `/token` returns 200, then authenticated `/mcp` requests return 200 and list the three tools below.
+
+Keep one replica and one worker while authorization codes are stored in memory. Access and refresh tokens use the persistent Railway signing key, so keep that key stable across deployments. The MCP SDK version is pinned to the version exercised by the regression tests.
 
 ## Available tools
 
