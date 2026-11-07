@@ -1,53 +1,47 @@
-# Chess Coach — ChatGPT MCP integration
+# Chess Coach — protected ChatGPT MCP plugin
 
-A personal Chess.com Stockfish coach, deployed as a Streamable HTTP MCP server.
+Fetch Chess.com public games and use Stockfish to detect opening errors, particularly moves 5–15.
 
-## What it does
+## Deployment
 
-- Lists up to 10 recent public games for a Chess.com username.
-- Analyzes recent rapid/blitz games with Stockfish (0.05–0.5 s per position).
-- Identifies high-evaluation-loss decisions on moves **5–15**.
-- Returns FENs, best moves, candidate variations, and a practical training plan.
-- Analyzes a PGN supplied directly in chat.
+Deployed at https://chess-coach-mcp-production-6a7c.up.railway.app/mcp using Railway's Docker builder.
 
-## Local Docker
+This plugin uses **OAuth 2.1 Authorization Code + PKCE**, with a private owner-password authorization screen. It is not anonymous. Do not choose "No authentication" when connecting.
 
-```bash
-docker build -t chess-coach .
-docker run --rm -p 8080:8080 chess-coach
-curl http://localhost:8080/health
-```
+## Configure OAuth secrets in Railway
 
-**Security:** The `/mcp` endpoint is intentionally disabled unless `CHESS_COACH_API_KEY` is configured. The health endpoint remains public.
+Set these on the `chess-coach-mcp` production service:
+- `CHESS_COACH_PUBLIC_URL=https://chess-coach-mcp-production-6a7c.up.railway.app`
+- `CHESS_COACH_LOGIN_PASSWORD`: a strong password, used only on the Chess Coach login screen.
+- `CHESS_COACH_OAUTH_SIGNING_KEY`: a random secret at least 32 characters.
 
-## Railway deployment
+The password and signing key must **never** be committed to GitHub or pasted into chats. Keep one Railway replica because authorization codes are temporarily stored in server memory.
 
-1. Connect Railway to this repository: **darshpaul/ChessPlugIn**.
-2. Choose **Deploy from GitHub Repo** and select this repository. Railway will use the Dockerfile.
-3. Add the service environment variable `CHESS_COACH_API_KEY` with a long random value. Do **not** put this value in GitHub, in a chat, or in a query parameter.
-4. Generate a public HTTPS domain in Railway Networking. Railway supplies `PORT`; the Dockerfile listens on it.
-5. Test `https://YOUR-DOMAIN/health` (should return status ok).
-6. MCP URL: `https://YOUR-DOMAIN/mcp`.
+## Connect in ChatGPT
 
-Important: This build uses a simple `Authorization: Bearer <key>` gate, **not OAuth**. Some ChatGPT custom MCP connection flows do not permit custom bearer authentication. Do not remove authentication to solve this; first confirm whether your connector supports custom headers. If it does not, replace the gate with an appropriate OAuth authorization server or a trusted access proxy before enabling the connector.
+1. Go to **Plugins** and add a custom MCP server.
+2. Name: `Chess Coach`
+3. Server URL: `https://chess-coach-mcp-production-6a7c.up.railway.app/mcp`
+4. Authentication: choose **OAuth** or **Use server OAuth discovery**.
+5. Allow the connection and authenticate on the Chess Coach owner-password page.
+6. Request: "Analyze the last 3 rapid Chess.com games for DarshPaul and focus on moves 5–15."
 
-## Using the tool in ChatGPT
+If connection creation offers CIMD versus DCR, choose **CIMD** (client ID metadata document) for this implementation. The authentication server supports the official ChatGPT public CIMD clients and ChatGPT's standard redirect URIs. It does **not** implement DCR or third-party OAuth provider registration.
 
-When a connection method compatible with the security setup is available, connect the URL ending in `/mcp`. Available custom connector controls depend on account/workspace.
+## Verification
 
-Try: *Analyze the last 3 rapid games for DarshPaul, especially moves 5–15. Show my critical mistakes, opposing tactical responses, and three concrete drills.*
+- `GET /health`: confirms process running.
+- `GET /.well-known/oauth-protected-resource`: announces OAuth authorization server.
+- `GET /.well-known/oauth-authorization-server`: announces OAuth PKCE endpoints.
+- `POST /mcp` without a token: returns HTTP 401 with `WWW-Authenticate` challenge.
+- `GET /authorize` with valid ChatGPT client, PKCE, redirect and state: displays a login form.
 
-The server provides Stockfish data; ChatGPT generates the natural-language explanations.
+A successful HTTP health check alone does not prove an actual ChatGPT OAuth handshake has completed. Test from ChatGPT's connector flow.
 
-## Caveats
+## Available tools
 
-- Uses Chess.com's public archives; no Chess.com password or API key required.
-- Short Stockfish searches are approximate. A loss above 90 centipawns is a review heuristic.
-- Searches the latest 12 monthly archives, up to 10 analyzed games.
-- No OAuth, job queue, or persistent result caching yet. Long analysis requests may time out on low-cost hosting.
-- This repository's code has not yet been verified end-to-end on Railway. Test before relying on it.
+- `list_recent_games`: fetch recent public games.
+- `analyze_recent_games`: run Stockfish on recent games and identify recurring mistakes.
+- `analyze_pgn`: analyze one supplied PGN.
 
-## API paths
-
-- GET `/health`: public service check.
-- MCP Streamable HTTP `/mcp`: access-controlled MCP tools (`list_recent_games`, `analyze_recent_games`, `analyze_pgn`).
+The chess analyses use short Stockfish searches; move evaluations are approximate. Hosting may incur Railway charges.
