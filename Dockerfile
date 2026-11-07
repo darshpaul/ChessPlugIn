@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends stockfish ca-ce
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY coach.py server.py ./
+COPY coach.py server.py auth.py ./
 ENV STOCKFISH_PATH=/usr/games/stockfish PORT=8080
 EXPOSE 8080
 CMD ["sh", "-c", "exec uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers"]
