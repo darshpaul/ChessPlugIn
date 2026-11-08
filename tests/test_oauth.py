@@ -67,7 +67,8 @@ def test_oauth_discovery_and_tool_call(client, params, monkeypatch, legacy):
     discovery = rpc(client, access, "tools/list")
     assert discovery.status_code == 200
     tools = discovery.json()["result"]["tools"]
-    assert {t["name"] for t in tools} == {"list_recent_games", "analyze_recent_games", "analyze_pgn"}
+    assert {t["name"] for t in tools} == {"list_recent_games", "analyze_recent_games", "analyze_pgn",
+                                            "show_chess_board", "get_board_games", "analyze_board_position"}
     for tool in tools:
         assert tool["_meta"]["securitySchemes"] == [{"type": "oauth2", "scopes": ["chess:analyze"]}]
         assert tool["annotations"]["readOnlyHint"] is True

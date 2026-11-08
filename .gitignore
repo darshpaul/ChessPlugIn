@@ -7,3 +7,5 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 test-results/
+web/node_modules/
+web/dist/

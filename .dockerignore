@@ -1,8 +1,11 @@
 .git
-.env
-.env.*
-!.env.example
 .venv
+.env*
+!.env.example
 __pycache__
 *.pyc
 .pytest_cache
+web/node_modules
+web/dist
+tests
+test-results
